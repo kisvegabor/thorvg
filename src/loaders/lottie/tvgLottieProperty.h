@@ -51,6 +51,21 @@ struct ColorStop
 };
 
 
+struct LottieFont;
+
+struct TextDocument
+{
+    char* text;
+    float lineHeight;
+    float lineShift;
+    RGB24 color;
+    uint16_t size;
+    uint8_t justify;
+    uint8_t tracking;
+    LottieFont* font;
+};
+
+
 static inline RGB24 operator-(const RGB24& lhs, const RGB24& rhs)
 {
     return {lhs.rgb[0] - rhs.rgb[0], lhs.rgb[1] - rhs.rgb[1], lhs.rgb[2] - rhs.rgb[2]};
@@ -502,6 +517,60 @@ struct LottiePosition
         }
     }
 
+};
+
+
+struct LottieTextDoc
+{
+    Array<LottieScalarFrame<TextDocument>>* frames = nullptr;
+    TextDocument value;
+
+    ~LottieTextDoc()
+    {
+        delete(frames);
+    }
+
+    LottieScalarFrame<TextDocument>& newFrame()
+    {
+        if (!frames) frames = new Array<LottieScalarFrame<TextDocument>>;
+        if (frames->count + 1 >= frames->reserved) {
+            auto old = frames->reserved;
+            frames->grow(frames->count + 2);
+            memset((void*)(frames->data + old), 0x00, sizeof(LottieScalarFrame<TextDocument>) * (frames->reserved - old));
+        }
+        ++frames->count;
+        return frames->last();
+    }
+
+    LottieScalarFrame<TextDocument>& nextFrame()
+    {
+        return (*frames)[frames->count];
+    }
+
+    TextDocument& operator()(float frameNo)
+    {
+        if (!frames) return value;
+        if (frames->count == 1 || frameNo <= frames->first().no) return frames->first().value;
+        if (frameNo >= frames->last().no) return frames->last().value;
+
+        //TODO: proper interpolation??
+        frameNo = roundf(frameNo);
+
+        uint32_t low = 1;
+        uint32_t high = frames->count - 1;
+
+        while (low <= high) {
+            auto mid = low + (high - low) / 2;
+            auto frame = frames->data + mid;
+            if (mathEqual(frameNo, frame->no)) return frame->value;
+            else if (frameNo > frame->no) low = mid + 1;
+            else high = mid - 1;
+        }
+
+        return value;
+    }
+
+    void prepare() {}
 };
 
 

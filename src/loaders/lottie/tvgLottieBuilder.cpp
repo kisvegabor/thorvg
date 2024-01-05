@@ -418,7 +418,7 @@ static void _updateEllipse(LottieGroup* parent, LottieObject** child, float fram
 
 static void _updatePath(LottieGroup* parent, LottieObject** child, float frameNo, TVG_UNUSED Inlist<RenderContext>& contexts, RenderContext* ctx)
 {
-    auto path= static_cast<LottiePath*>(*child);
+    auto path = static_cast<LottiePath*>(*child);
 
     if (ctx->repeater) {
         auto p = Shape::gen();
@@ -436,6 +436,59 @@ static void _updatePath(LottieGroup* parent, LottieObject** child, float frameNo
             P(merging)->rs.stroke->join = StrokeJoin::Round;
         }
     }
+}
+
+
+static void _updateText(LottieGroup* parent, LottieObject** child, float frameNo, TVG_UNUSED Inlist<RenderContext>& contexts, TVG_UNUSED RenderContext* ctx)
+{
+    auto text = static_cast<LottieText*>(*child);
+    auto& doc = text->doc(frameNo);
+    auto p = doc.text;
+
+    if (!p || !doc.font) return;
+
+    auto scale = doc.size * 0.01f;
+    float spacing = text->spacing(frameNo) / scale;
+    Point pos = {0, (doc.lineHeight - doc.font->ascent) * scale * 0.5f};
+
+    auto scene = Scene::gen();
+
+    //text string
+    while (*p != '\0') {
+        auto found = false;
+        //find the glyph
+        for (auto g = doc.font->chars.data; g < doc.font->chars.end(); ++g) {
+            auto glyph = *g;
+            //draw matched glyphs
+            if (!strncmp(glyph->code, p, glyph->len) && glyph->size == doc.size) {
+                auto shape = Shape::gen();
+                for (auto p = glyph->children.data; p < glyph->children.end(); ++p) {
+                    if (static_cast<LottiePath*>(*p)->pathset(frameNo, P(shape)->rs.path.cmds, P(shape)->rs.path.pts)) {
+                        P(shape)->update(RenderUpdateFlag::Path);
+                    }
+                }
+                shape->fill(doc.color.rgb[0], doc.color.rgb[1], doc.color.rgb[2]);
+                shape->translate(pos.x, 0.0f);
+                scene->push(std::move(shape));
+
+                pos.x += glyph->width + spacing;
+                p += glyph->len;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            TVGERR("LOTTIE", "no glyph data?");
+            break;
+        }
+    }
+
+    //center aligned
+    if (doc.justify == 2) scene->translate(-pos.x * 0.5f * scale, 0.0f);
+
+    scene->scale(scale);
+
+    parent->scene->push(std::move(scene));
 }
 
 
@@ -788,6 +841,10 @@ static void _updateChildren(LottieGroup* parent, float frameNo, Inlist<RenderCon
                 }
                 case LottieObject::Trimpath: {
                     _updateTrimpath(parent, child, frameNo, contexts, ctx);
+                    break;
+                }
+                case LottieObject::Text: {
+                    _updateText(parent, child, frameNo, contexts, ctx);
                     break;
                 }
                 case LottieObject::Repeater: {

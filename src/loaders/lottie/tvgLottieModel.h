@@ -30,6 +30,7 @@
 
 struct LottieComposition;
 
+
 struct LottieStroke
 {
     struct DashAttr
@@ -219,6 +220,7 @@ struct LottieObject
         Polystar,
         Image,
         Trimpath,
+        Text,
         Repeater,
         RoundedCorner
     };
@@ -232,6 +234,57 @@ struct LottieObject
     Type type;
     bool statical = true;      //no keyframes
     bool hidden = false;       //remove?
+};
+
+
+struct LottieGlyph
+{
+    Array<LottieObject*> children;   //glyph shapes.
+    float width;
+    char* code;
+    uint16_t size;
+    uint8_t len;
+
+    void prepare()
+    {
+        len = strlen(code);
+    }
+
+    ~LottieGlyph()
+    {
+        for (auto p = children.data; p < children.end(); ++p) delete(*p);
+        free(code);
+    }
+};
+
+
+struct LottieFont
+{
+    enum Origin : uint8_t { Local = 0, CssURL, ScriptURL, FontURL, Embedded };
+
+    ~LottieFont()
+    {
+        for (auto c = chars.data; c < chars.end(); ++c) delete(*c);
+    }
+
+    Array<LottieGlyph*> chars;
+    char* name = nullptr;
+    char* family = nullptr;
+    char* style = nullptr;
+    float ascent = 0.0f;
+    Origin origin = Embedded;
+};
+
+
+struct LottieText : LottieObject
+{
+    void prepare()
+    {
+        LottieObject::type = LottieObject::Text;
+    }
+
+    LottieTextDoc doc;
+    LottieFloat spacing = 0.0f;  //letter spacing
 };
 
 
@@ -561,6 +614,7 @@ struct LottieComposition
     float frameRate;
     Array<LottieObject*> assets;
     Array<LottieInterpolator*> interpolators;
+    Array<LottieFont*> fonts;
     bool initiated = false;
 };
 
